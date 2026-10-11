@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'">
+<title>QR Code Generator</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surface:#fff;--ink:#1b1b19;--muted:#585852;--line:#d9d7cf;--field:#fff;
+  --accent:#0d5e4e;--accent-ink:#fff;--accent-soft:#e3efeb;--warn:#7a4b00;--warn-bg:#fdf3df;
+  --err:#a1261b;--err-bg:#fbe9e7;--radius:10px;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141513;--surface:#1d1e1c;--ink:#ecebe6;--muted:#a9a8a0;--line:#363732;--field:#151614;
+  --accent:#5fc9ae;--accent-ink:#0b1a16;--accent-soft:#1f322d;--warn:#f2c46d;--warn-bg:#2d2513;
+  --err:#ff9b8f;--err-bg:#33201d;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 48px}
+header{margin-bottom:20px}
+h1{font-size:1.5rem;letter-spacing:-.01em;margin:0}
+header p{margin:2px 0 0;color:var(--muted)}
+main{display:grid;gap:20px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:820px){main{grid-template-columns:minmax(0,1fr) 360px}aside{position:sticky;top:16px;align-self:start}}
+@media (max-width:819px){.editor{display:contents}.editor>.card+.card{margin:0;order:2}aside{order:1}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.card+.card{margin-top:16px}
+h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px}
+[role=tablist]{display:flex;gap:4px;padding:4px;background:var(--bg);border-radius:8px;margin-bottom:16px}
+[role=tab]{flex:1;border:0;background:none;color:var(--muted);font:inherit;font-weight:600;padding:8px 6px;border-radius:6px;cursor:pointer}
+[role=tab][aria-selected=true]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgb(0 0 0/.15)}
+label,.lbl{display:block;font-weight:600;font-size:.88rem;margin-bottom:4px}
+.grid{display:grid;gap:12px 14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.full{grid-column:1/-1}
+input[type=text],input[type=email],input[type=tel],input[type=password],input[type=number],select,textarea{
+  width:100%;font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+textarea{min-height:120px;resize:vertical}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0;border-color:var(--accent)}
+.check{display:flex;gap:8px;align-items:center;font-weight:500;font-size:.92rem;margin:0}
+.check input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+.check:has(input:disabled){color:var(--muted)}
+.pw{display:flex;gap:6px}
+.hint{color:var(--muted);font-size:.84rem;margin:4px 0 0}
+fieldset{border:0;margin:0 0 14px;padding:0}
+legend{font-weight:600;font-size:.88rem;margin-bottom:6px;padding:0}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{margin:0;text-align:center;border:1px solid var(--line);border-radius:7px;padding:7px 4px;cursor:pointer;font-weight:500;line-height:1.25}
+.seg label b{display:block;font-size:1.05rem}
+.seg label span{font-size:.78rem;color:var(--muted)}
+.seg input:checked+label{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
+.colors{display:flex;gap:14px;flex-wrap:wrap}
+.colors label{display:flex;align-items:center;gap:8px;margin:0}
+input[type=color]{width:40px;height:32px;border:1px solid var(--line);border-radius:6px;padding:2px;background:var(--field)}
+#qr{display:grid;place-items:center;aspect-ratio:1;border-radius:8px;background:var(--qr-bg,#fff);border:1px solid var(--line);overflow:hidden}
+#qr svg{width:100%;height:100%;display:block}
+#qr .placeholder{color:#55554f;text-align:center;padding:24px;margin:0;font-size:.95rem}
+#qr:has(.placeholder){background:repeating-linear-gradient(45deg,#f3f2ee 0 10px,#ecebe5 10px 20px)}
+.error{background:var(--err-bg);color:var(--err);border-radius:8px;padding:10px 12px;margin:12px 0 0;font-weight:500}
+#warnings{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:6px}
+#warnings:empty{display:none}
+#warnings li{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:8px 12px;font-size:.88rem}
+dl{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:14px 0 10px}
+dl div{background:var(--bg);border-radius:7px;padding:6px 8px}
+dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+dd{margin:0;font:600 .95rem var(--mono)}
+#capacity{height:8px;border-radius:4px;background:var(--bg);overflow:hidden;border:1px solid var(--line)}
+#capacity::before{content:"";display:block;height:100%;width:var(--used,0%);background:var(--accent);transition:width .15s}
+#capacity.high::before{background:#c98a00}
+#capacity.over::before{background:var(--err)}
+#capacity-label{font:.8rem var(--mono);color:var(--muted);margin:6px 0 0}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+button.btn{font:inherit;font-weight:600;border-radius:7px;padding:9px 10px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.btn:disabled{opacity:.45;cursor:not-allowed}
+button.btn[hidden]{display:none}
+#status{min-height:1.4em;font-size:.86rem;color:var(--accent);margin:8px 0 0}
+details{margin-top:12px;font-size:.86rem}
+summary{cursor:pointer;color:var(--muted);font-weight:600}
+pre{font:.8rem/1.45 var(--mono);background:var(--bg);border-radius:7px;padding:10px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto;margin:8px 0 0}
+footer{margin-top:28px;color:var(--muted);font-size:.82rem}
+footer a{color:inherit}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>QR Code Generator</h1>
+  <p>Runs entirely in this page. Nothing you type leaves your device.</p>
+</header>
+<main>
+<section class="editor">
+  <div class="card">
+    <div role="tablist" aria-label="Code type">
+      <button role="tab" id="tab-text" data-type="text" aria-controls="panel-text" aria-selected="true">Text</button>
+      <button role="tab" id="tab-url" data-type="url" aria-controls="panel-url" aria-selected="false" tabindex="-1">URL</button>
+      <button role="tab" id="tab-wifi" data-type="wifi" aria-controls="panel-wifi" aria-selected="false" tabindex="-1">Wi-Fi</button>
+      <button role="tab" id="tab-vcard" data-type="vcard" aria-controls="panel-vcard" aria-selected="false" tabindex="-1">Contact</button>
+    </div>
+
+    <form id="panel-text" role="tabpanel" aria-labelledby="tab-text" onsubmit="return false">
+      <label for="text-value">Text</label>
+      <textarea id="text-value" data-field="text.value" placeholder="Anything — a note, a code, emoji…"></textarea>
+    </form>
+
+    <form id="panel-url" role="tabpanel" aria-labelledby="tab-url" onsubmit="return false" hidden>
+      <label for="url-value">Web address</label>
+      <input id="url-value" type="text" inputmode="url" autocomplete="url" spellcheck="false" autocapitalize="off" data-field="url.value" placeholder="example.com/page">
+      <p class="hint">https:// is added if you leave out the scheme. Capitalization is kept as typed.</p>
+    </form>
+
+    <form id="panel-wifi" role="tabpanel" aria-labelledby="tab-wifi" onsubmit="return false" hidden>
+      <div class="grid">
+        <div class="full"><label for="wifi-ssid">Network name (SSID)</label>
+          <input id="wifi-ssid" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" data-field="wifi.ssid"></div>
+        <div class="full"><label for="wifi-password">Password</label>
+          <div class="pw"><input id="wifi-password" type="password" autocomplete="off" spellcheck="false" data-field="wifi.password">
+          <button type="button" class="btn" id="pw-toggle" aria-pressed="false" aria-controls="wifi-password" aria-label="Show password">Show</button></div></div>
+        <div><label for="wifi-security">Security</label>
+          <select id="wifi-security" data-field="wifi.security">
+            <option value="WPA">WPA / WPA2 / WPA3</option>
+            <option value="WEP">WEP</option>
+            <option value="nopass">None (open)</option>
+          </select></div>
+        <div style="align-self:end;padding-bottom:8px"><label class="check"><input type="checkbox" data-field="wifi.hidden"> Hidden network</label></div>
+      </div>
+    </form>
+
+    <form id="panel-vcard" role="tabpanel" aria-labelledby="tab-vcard" onsubmit="return false" hidden>
+      <div class="grid">
+        <div><label for="vc-first">First name</label><input id="vc-first" type="text" autocomplete="given-name" data-field="vcard.first"></div>
+        <div><label for="vc-last">Last name</label><input id="vc-last" type="text" autocomplete="family-name" data-field="vcard.last"></div>
+        <div class="full"><label for="vc-fn">Display name</label><input id="vc-fn" type="text" data-field="vcard.fn">
+          <p class="hint">Leave blank to use first + last name.</p></div>
+        <div><label for="vc-org">Organization</label><input id="vc-org" type="text" autocomplete="organization" data-field="vcard.org"></div>
+        <div><label for="vc-title">Job title</label><input id="vc-title" type="text" autocomplete="organization-title" data-field="vcard.title"></div>
+        <div><label for="vc-tel">Phone</label><input id="vc-tel" type="tel" autocomplete="tel" data-field="vcard.tel"></div>
+        <div><label for="vc-email">Email</label><input id="vc-email" type="email" autocomplete="email" data-field="vcard.email"></div>
+        <div class="full"><label for="vc-url">Website</label><input id="vc-url" type="text" inputmode="url" autocomplete="url" data-field="vcard.url"></div>
+        <div class="full"><label for="vc-street">Street</label><input id="vc-street" type="text" autocomplete="street-address" data-field="vcard.street"></div>
+        <div><label for="vc-city">City</label><input id="vc-city" type="text" autocomplete="address-level2" data-field="vcard.city"></div>
+        <div><label for="vc-region">State / region</label><input id="vc-region" type="text" autocomplete="address-level1" data-field="vcard.region"></div>
+        <div><label for="vc-postal">Postal code</label><input id="vc-postal" type="text" autocomplete="postal-code" data-field="vcard.postal"></div>
+        <div><label for="vc-country">Country</label><input id="vc-country" type="text" autocomplete="country-name" data-field="vcard.country"></div>
+        <div class="full"><label for="vc-note">Note</label><textarea id="vc-note" data-field="vcard.note" style="min-height:70px"></textarea></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Settings</h2>
+    <fieldset>
+      <legend>Error correction</legend>
+      <div class="seg">
+        <input type="radio" name="ecc" id="ecc-L" value="L" data-setting="ecc"><label for="ecc-L"><b>L</b><span>~7%</span></label>
+        <input type="radio" name="ecc" id="ecc-M" value="M" data-setting="ecc"><label for="ecc-M"><b>M</b><span>~15%</span></label>
+        <input type="radio" name="ecc" id="ecc-Q" value="Q" data-setting="ecc"><label for="ecc-Q"><b>Q</b><span>~25%</span></label>
+        <input type="radio" name="ecc" id="ecc-H" value="H" data-setting="ecc"><label for="ecc-H"><b>H</b><span>~30%</span></label>
+      </div>
+      <p class="hint">Share of the code that can be damaged and still scan. Higher levels hold less data and make denser codes.</p>
+      <label class="check" style="margin-top:8px"><input type="checkbox" data-setting="boostEcc"> Raise the level when it fits at no extra size</label>
+    </fieldset>
+    <div class="grid" style="margin-bottom:14px">
+      <div><label for="qz">Quiet zone (modules)</label><input id="qz" type="number" min="0" max="8" step="1" data-setting="quietZone"></div>
+      <div><label for="png-size">PNG size (px)</label><input id="png-size" type="number" min="64" max="8192" step="64" data-setting="pngSize" aria-describedby="png-hint">
+        <p class="hint" id="png-hint"></p></div>
+    </div>
+    <fieldset>
+      <legend>Colors</legend>
+      <div class="colors">
+        <label><input type="color" data-setting="fg"> Foreground</label>
+        <label><input type="color" data-setting="bg"> Background</label>
+      </div>
+    </fieldset>
+    <fieldset style="margin:0">
+      <legend>Storage</legend>
+      <label class="check"><input type="checkbox" data-setting="remember"> Remember form values in this browser</label>
+      <label class="check" style="margin-top:6px"><input type="checkbox" id="remember-pw" data-setting="rememberPassword"> Include the Wi-Fi password</label>
+    </fieldset>
+  </div>
+</section>
+
+<aside aria-label="Preview and export">
+  <div class="card">
+    <div id="qr" role="img" aria-label="No QR code yet"></div>
+    <div aria-live="polite">
+      <p id="qr-error" class="error" hidden></p>
+      <ul id="warnings"></ul>
+      <dl>
+        <div><dt>Version</dt><dd id="stat-version">—</dd></div>
+        <div><dt>Modules</dt><dd id="stat-modules">—</dd></div>
+        <div><dt>Bytes</dt><dd id="stat-bytes">0</dd></div>
+        <div><dt>Level</dt><dd id="stat-level">M</dd></div>
+      </dl>
+    </div>
+    <div id="capacity" role="meter" aria-label="Capacity used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="capacity-label"></div>
+    <p id="capacity-label"></p>
+    <div class="actions">
+      <button type="button" class="btn primary" id="dl-svg" data-needs-code disabled>Download SVG</button>
+      <button type="button" class="btn primary" id="dl-png" data-needs-code disabled>Download PNG</button>
+      <button type="button" class="btn" id="copy-img" data-needs-code hidden disabled>Copy image</button>
+      <button type="button" class="btn" id="copy-payload" disabled>Copy payload</button>
+    </div>
+    <p id="status" role="status"></p>
+    <details>
+      <summary>Encoded payload</summary>
+      <pre id="payload-raw"></pre>
+    </details>
+  </div>
+</aside>
+</main>
+<footer>
+  Encoder: QR Code generator library by Project Nayuki, MIT License (notice in page source and LICENSE-THIRD-PARTY).
+  Works offline — save this page and open it from disk.
+</footer>
+</div>
+<script type="module">
+/*@inline src/qrcodegen.js*/
+/*@inline src/payloads.js*/
+/*@inline src/qr.js*/
+/*@inline src/app.js*/
+</script>
+</body>
+</html>

@@ -1,0 +1,1307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'">
+<title>QR Code Generator</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surface:#fff;--ink:#1b1b19;--muted:#585852;--line:#d9d7cf;--field:#fff;
+  --accent:#0d5e4e;--accent-ink:#fff;--accent-soft:#e3efeb;--warn:#7a4b00;--warn-bg:#fdf3df;
+  --err:#a1261b;--err-bg:#fbe9e7;--radius:10px;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141513;--surface:#1d1e1c;--ink:#ecebe6;--muted:#a9a8a0;--line:#363732;--field:#151614;
+  --accent:#5fc9ae;--accent-ink:#0b1a16;--accent-soft:#1f322d;--warn:#f2c46d;--warn-bg:#2d2513;
+  --err:#ff9b8f;--err-bg:#33201d;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding:24px 16px 48px}
+header{margin-bottom:20px}
+h1{font-size:1.5rem;letter-spacing:-.01em;margin:0}
+header p{margin:2px 0 0;color:var(--muted)}
+main{display:grid;gap:20px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:820px){main{grid-template-columns:minmax(0,1fr) 360px}aside{position:sticky;top:16px;align-self:start}}
+@media (max-width:819px){.editor{display:contents}.editor>.card+.card{margin:0;order:2}aside{order:1}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.card+.card{margin-top:16px}
+h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px}
+[role=tablist]{display:flex;gap:4px;padding:4px;background:var(--bg);border-radius:8px;margin-bottom:16px}
+[role=tab]{flex:1;border:0;background:none;color:var(--muted);font:inherit;font-weight:600;padding:8px 6px;border-radius:6px;cursor:pointer}
+[role=tab][aria-selected=true]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgb(0 0 0/.15)}
+label,.lbl{display:block;font-weight:600;font-size:.88rem;margin-bottom:4px}
+.grid{display:grid;gap:12px 14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.full{grid-column:1/-1}
+input[type=text],input[type=email],input[type=tel],input[type=password],input[type=number],select,textarea{
+  width:100%;font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+textarea{min-height:120px;resize:vertical}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0;border-color:var(--accent)}
+.check{display:flex;gap:8px;align-items:center;font-weight:500;font-size:.92rem;margin:0}
+.check input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+.check:has(input:disabled){color:var(--muted)}
+.pw{display:flex;gap:6px}
+.hint{color:var(--muted);font-size:.84rem;margin:4px 0 0}
+fieldset{border:0;margin:0 0 14px;padding:0}
+legend{font-weight:600;font-size:.88rem;margin-bottom:6px;padding:0}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{margin:0;text-align:center;border:1px solid var(--line);border-radius:7px;padding:7px 4px;cursor:pointer;font-weight:500;line-height:1.25}
+.seg label b{display:block;font-size:1.05rem}
+.seg label span{font-size:.78rem;color:var(--muted)}
+.seg input:checked+label{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
+.colors{display:flex;gap:14px;flex-wrap:wrap}
+.colors label{display:flex;align-items:center;gap:8px;margin:0}
+input[type=color]{width:40px;height:32px;border:1px solid var(--line);border-radius:6px;padding:2px;background:var(--field)}
+#qr{display:grid;place-items:center;aspect-ratio:1;border-radius:8px;background:var(--qr-bg,#fff);border:1px solid var(--line);overflow:hidden}
+#qr svg{width:100%;height:100%;display:block}
+#qr .placeholder{color:#55554f;text-align:center;padding:24px;margin:0;font-size:.95rem}
+#qr:has(.placeholder){background:repeating-linear-gradient(45deg,#f3f2ee 0 10px,#ecebe5 10px 20px)}
+.error{background:var(--err-bg);color:var(--err);border-radius:8px;padding:10px 12px;margin:12px 0 0;font-weight:500}
+#warnings{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:6px}
+#warnings:empty{display:none}
+#warnings li{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:8px 12px;font-size:.88rem}
+dl{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:14px 0 10px}
+dl div{background:var(--bg);border-radius:7px;padding:6px 8px}
+dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+dd{margin:0;font:600 .95rem var(--mono)}
+#capacity{height:8px;border-radius:4px;background:var(--bg);overflow:hidden;border:1px solid var(--line)}
+#capacity::before{content:"";display:block;height:100%;width:var(--used,0%);background:var(--accent);transition:width .15s}
+#capacity.high::before{background:#c98a00}
+#capacity.over::before{background:var(--err)}
+#capacity-label{font:.8rem var(--mono);color:var(--muted);margin:6px 0 0}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+button.btn{font:inherit;font-weight:600;border-radius:7px;padding:9px 10px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.btn:disabled{opacity:.45;cursor:not-allowed}
+button.btn[hidden]{display:none}
+#status{min-height:1.4em;font-size:.86rem;color:var(--accent);margin:8px 0 0}
+details{margin-top:12px;font-size:.86rem}
+summary{cursor:pointer;color:var(--muted);font-weight:600}
+pre{font:.8rem/1.45 var(--mono);background:var(--bg);border-radius:7px;padding:10px;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto;margin:8px 0 0}
+footer{margin-top:28px;color:var(--muted);font-size:.82rem}
+footer a{color:inherit}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>QR Code Generator</h1>
+  <p>Runs entirely in this page. Nothing you type leaves your device.</p>
+</header>
+<main>
+<section class="editor">
+  <div class="card">
+    <div role="tablist" aria-label="Code type">
+      <button role="tab" id="tab-text" data-type="text" aria-controls="panel-text" aria-selected="true">Text</button>
+      <button role="tab" id="tab-url" data-type="url" aria-controls="panel-url" aria-selected="false" tabindex="-1">URL</button>
+      <button role="tab" id="tab-wifi" data-type="wifi" aria-controls="panel-wifi" aria-selected="false" tabindex="-1">Wi-Fi</button>
+      <button role="tab" id="tab-vcard" data-type="vcard" aria-controls="panel-vcard" aria-selected="false" tabindex="-1">Contact</button>
+    </div>
+
+    <form id="panel-text" role="tabpanel" aria-labelledby="tab-text" onsubmit="return false">
+      <label for="text-value">Text</label>
+      <textarea id="text-value" data-field="text.value" placeholder="Anything — a note, a code, emoji…"></textarea>
+    </form>
+
+    <form id="panel-url" role="tabpanel" aria-labelledby="tab-url" onsubmit="return false" hidden>
+      <label for="url-value">Web address</label>
+      <input id="url-value" type="text" inputmode="url" autocomplete="url" spellcheck="false" autocapitalize="off" data-field="url.value" placeholder="example.com/page">
+      <p class="hint">https:// is added if you leave out the scheme. Capitalization is kept as typed.</p>
+    </form>
+
+    <form id="panel-wifi" role="tabpanel" aria-labelledby="tab-wifi" onsubmit="return false" hidden>
+      <div class="grid">
+        <div class="full"><label for="wifi-ssid">Network name (SSID)</label>
+          <input id="wifi-ssid" type="text" autocomplete="off" spellcheck="false" autocapitalize="off" data-field="wifi.ssid"></div>
+        <div class="full"><label for="wifi-password">Password</label>
+          <div class="pw"><input id="wifi-password" type="password" autocomplete="off" spellcheck="false" data-field="wifi.password">
+          <button type="button" class="btn" id="pw-toggle" aria-pressed="false" aria-controls="wifi-password" aria-label="Show password">Show</button></div></div>
+        <div><label for="wifi-security">Security</label>
+          <select id="wifi-security" data-field="wifi.security">
+            <option value="WPA">WPA / WPA2 / WPA3</option>
+            <option value="WEP">WEP</option>
+            <option value="nopass">None (open)</option>
+          </select></div>
+        <div style="align-self:end;padding-bottom:8px"><label class="check"><input type="checkbox" data-field="wifi.hidden"> Hidden network</label></div>
+      </div>
+    </form>
+
+    <form id="panel-vcard" role="tabpanel" aria-labelledby="tab-vcard" onsubmit="return false" hidden>
+      <div class="grid">
+        <div><label for="vc-first">First name</label><input id="vc-first" type="text" autocomplete="given-name" data-field="vcard.first"></div>
+        <div><label for="vc-last">Last name</label><input id="vc-last" type="text" autocomplete="family-name" data-field="vcard.last"></div>
+        <div class="full"><label for="vc-fn">Display name</label><input id="vc-fn" type="text" data-field="vcard.fn">
+          <p class="hint">Leave blank to use first + last name.</p></div>
+        <div><label for="vc-org">Organization</label><input id="vc-org" type="text" autocomplete="organization" data-field="vcard.org"></div>
+        <div><label for="vc-title">Job title</label><input id="vc-title" type="text" autocomplete="organization-title" data-field="vcard.title"></div>
+        <div><label for="vc-tel">Phone</label><input id="vc-tel" type="tel" autocomplete="tel" data-field="vcard.tel"></div>
+        <div><label for="vc-email">Email</label><input id="vc-email" type="email" autocomplete="email" data-field="vcard.email"></div>
+        <div class="full"><label for="vc-url">Website</label><input id="vc-url" type="text" inputmode="url" autocomplete="url" data-field="vcard.url"></div>
+        <div class="full"><label for="vc-street">Street</label><input id="vc-street" type="text" autocomplete="street-address" data-field="vcard.street"></div>
+        <div><label for="vc-city">City</label><input id="vc-city" type="text" autocomplete="address-level2" data-field="vcard.city"></div>
+        <div><label for="vc-region">State / region</label><input id="vc-region" type="text" autocomplete="address-level1" data-field="vcard.region"></div>
+        <div><label for="vc-postal">Postal code</label><input id="vc-postal" type="text" autocomplete="postal-code" data-field="vcard.postal"></div>
+        <div><label for="vc-country">Country</label><input id="vc-country" type="text" autocomplete="country-name" data-field="vcard.country"></div>
+        <div class="full"><label for="vc-note">Note</label><textarea id="vc-note" data-field="vcard.note" style="min-height:70px"></textarea></div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Settings</h2>
+    <fieldset>
+      <legend>Error correction</legend>
+      <div class="seg">
+        <input type="radio" name="ecc" id="ecc-L" value="L" data-setting="ecc"><label for="ecc-L"><b>L</b><span>~7%</span></label>
+        <input type="radio" name="ecc" id="ecc-M" value="M" data-setting="ecc"><label for="ecc-M"><b>M</b><span>~15%</span></label>
+        <input type="radio" name="ecc" id="ecc-Q" value="Q" data-setting="ecc"><label for="ecc-Q"><b>Q</b><span>~25%</span></label>
+        <input type="radio" name="ecc" id="ecc-H" value="H" data-setting="ecc"><label for="ecc-H"><b>H</b><span>~30%</span></label>
+      </div>
+      <p class="hint">Share of the code that can be damaged and still scan. Higher levels hold less data and make denser codes.</p>
+      <label class="check" style="margin-top:8px"><input type="checkbox" data-setting="boostEcc"> Raise the level when it fits at no extra size</label>
+    </fieldset>
+    <div class="grid" style="margin-bottom:14px">
+      <div><label for="qz">Quiet zone (modules)</label><input id="qz" type="number" min="0" max="8" step="1" data-setting="quietZone"></div>
+      <div><label for="png-size">PNG size (px)</label><input id="png-size" type="number" min="64" max="8192" step="64" data-setting="pngSize" aria-describedby="png-hint">
+        <p class="hint" id="png-hint"></p></div>
+    </div>
+    <fieldset>
+      <legend>Colors</legend>
+      <div class="colors">
+        <label><input type="color" data-setting="fg"> Foreground</label>
+        <label><input type="color" data-setting="bg"> Background</label>
+      </div>
+    </fieldset>
+    <fieldset style="margin:0">
+      <legend>Storage</legend>
+      <label class="check"><input type="checkbox" data-setting="remember"> Remember form values in this browser</label>
+      <label class="check" style="margin-top:6px"><input type="checkbox" id="remember-pw" data-setting="rememberPassword"> Include the Wi-Fi password</label>
+    </fieldset>
+  </div>
+</section>
+
+<aside aria-label="Preview and export">
+  <div class="card">
+    <div id="qr" role="img" aria-label="No QR code yet"></div>
+    <div aria-live="polite">
+      <p id="qr-error" class="error" hidden></p>
+      <ul id="warnings"></ul>
+      <dl>
+        <div><dt>Version</dt><dd id="stat-version">—</dd></div>
+        <div><dt>Modules</dt><dd id="stat-modules">—</dd></div>
+        <div><dt>Bytes</dt><dd id="stat-bytes">0</dd></div>
+        <div><dt>Level</dt><dd id="stat-level">M</dd></div>
+      </dl>
+    </div>
+    <div id="capacity" role="meter" aria-label="Capacity used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="capacity-label"></div>
+    <p id="capacity-label"></p>
+    <div class="actions">
+      <button type="button" class="btn primary" id="dl-svg" data-needs-code disabled>Download SVG</button>
+      <button type="button" class="btn primary" id="dl-png" data-needs-code disabled>Download PNG</button>
+      <button type="button" class="btn" id="copy-img" data-needs-code hidden disabled>Copy image</button>
+      <button type="button" class="btn" id="copy-payload" disabled>Copy payload</button>
+    </div>
+    <p id="status" role="status"></p>
+    <details>
+      <summary>Encoded payload</summary>
+      <pre id="payload-raw"></pre>
+    </details>
+  </div>
+</aside>
+</main>
+<footer>
+  Encoder: QR Code generator library by Project Nayuki, MIT License (notice in page source and LICENSE-THIRD-PARTY).
+  Works offline — save this page and open it from disk.
+</footer>
+</div>
+<script type="module">
+// ---- src/qrcodegen.js ----
+/* 
+ * QR Code generator library (TypeScript)
+ * 
+ * Copyright (c) Project Nayuki. (MIT License)
+ * https://www.nayuki.io/page/qr-code-generator-library
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ * - The above copyright notice and this permission notice shall be included in
+ *   all copies or substantial portions of the Software.
+ * - The Software is provided "as is", without warranty of any kind, express or
+ *   implied, including but not limited to the warranties of merchantability,
+ *   fitness for a particular purpose and noninfringement. In no event shall the
+ *   authors or copyright holders be liable for any claim, damages or other
+ *   liability, whether in an action of contract, tort or otherwise, arising from,
+ *   out of or in connection with the Software or the use or other dealings in the
+ *   Software.
+ */
+// Vendored from https://github.com/nayuki/QR-Code-generator (typescript-javascript/qrcodegen.ts),
+// compiled with tsc --target ES2018 --removeComments; re-indented. Unmodified otherwise.
+var qrcodegen;
+(function (qrcodegen) {
+  class QrCode {
+    static encodeText(text, ecl) {
+      const segs = qrcodegen.QrSegment.makeSegments(text);
+      return QrCode.encodeSegments(segs, ecl);
+    }
+    static encodeBinary(data, ecl) {
+      const seg = qrcodegen.QrSegment.makeBytes(data);
+      return QrCode.encodeSegments([seg], ecl);
+    }
+    static encodeSegments(segs, ecl, minVersion = 1, maxVersion = 40, mask = -1, boostEcl = true) {
+      if (!(QrCode.MIN_VERSION <= minVersion && minVersion <= maxVersion && maxVersion <= QrCode.MAX_VERSION)
+        || mask < -1 || mask > 7)
+        throw new RangeError("Invalid value");
+      let version;
+      let dataUsedBits;
+      for (version = minVersion;; version++) {
+        const dataCapacityBits = QrCode.getNumDataCodewords(version, ecl) * 8;
+        const usedBits = QrSegment.getTotalBits(segs, version);
+        if (usedBits <= dataCapacityBits) {
+          dataUsedBits = usedBits;
+          break;
+        }
+        if (version >= maxVersion)
+          throw new RangeError("Data too long");
+      }
+      for (const newEcl of [QrCode.Ecc.MEDIUM, QrCode.Ecc.QUARTILE, QrCode.Ecc.HIGH]) {
+        if (boostEcl && dataUsedBits <= QrCode.getNumDataCodewords(version, newEcl) * 8)
+          ecl = newEcl;
+      }
+      let bb = [];
+      for (const seg of segs) {
+        appendBits(seg.mode.modeBits, 4, bb);
+        appendBits(seg.numChars, seg.mode.numCharCountBits(version), bb);
+        for (const b of seg.getData())
+          bb.push(b);
+      }
+      assert(bb.length == dataUsedBits);
+      const dataCapacityBits = QrCode.getNumDataCodewords(version, ecl) * 8;
+      assert(bb.length <= dataCapacityBits);
+      appendBits(0, Math.min(4, dataCapacityBits - bb.length), bb);
+      appendBits(0, (8 - bb.length % 8) % 8, bb);
+      assert(bb.length % 8 == 0);
+      for (let padByte = 0xEC; bb.length < dataCapacityBits; padByte ^= 0xEC ^ 0x11)
+        appendBits(padByte, 8, bb);
+      let dataCodewords = [];
+      while (dataCodewords.length * 8 < bb.length)
+        dataCodewords.push(0);
+      bb.forEach((b, i) => dataCodewords[i >>> 3] |= b << (7 - (i & 7)));
+      return new QrCode(version, ecl, dataCodewords, mask);
+    }
+    constructor(version, errorCorrectionLevel, dataCodewords, msk) {
+      this.version = version;
+      this.errorCorrectionLevel = errorCorrectionLevel;
+      this.modules = [];
+      this.isFunction = [];
+      if (version < QrCode.MIN_VERSION || version > QrCode.MAX_VERSION)
+        throw new RangeError("Version value out of range");
+      if (msk < -1 || msk > 7)
+        throw new RangeError("Mask value out of range");
+      this.size = version * 4 + 17;
+      let row = [];
+      for (let i = 0; i < this.size; i++)
+        row.push(false);
+      for (let i = 0; i < this.size; i++) {
+        this.modules.push(row.slice());
+        this.isFunction.push(row.slice());
+      }
+      this.drawFunctionPatterns();
+      const allCodewords = this.addEccAndInterleave(dataCodewords);
+      this.drawCodewords(allCodewords);
+      if (msk == -1) {
+        let minPenalty = 1000000000;
+        for (let i = 0; i < 8; i++) {
+          this.applyMask(i);
+          this.drawFormatBits(i);
+          const penalty = this.getPenaltyScore();
+          if (penalty < minPenalty) {
+            msk = i;
+            minPenalty = penalty;
+          }
+          this.applyMask(i);
+        }
+      }
+      assert(0 <= msk && msk <= 7);
+      this.mask = msk;
+      this.applyMask(msk);
+      this.drawFormatBits(msk);
+      this.isFunction = [];
+    }
+    getModule(x, y) {
+      return 0 <= x && x < this.size && 0 <= y && y < this.size && this.modules[y][x];
+    }
+    drawFunctionPatterns() {
+      for (let i = 0; i < this.size; i++) {
+        this.setFunctionModule(6, i, i % 2 == 0);
+        this.setFunctionModule(i, 6, i % 2 == 0);
+      }
+      this.drawFinderPattern(3, 3);
+      this.drawFinderPattern(this.size - 4, 3);
+      this.drawFinderPattern(3, this.size - 4);
+      const alignPatPos = this.getAlignmentPatternPositions();
+      const numAlign = alignPatPos.length;
+      for (let i = 0; i < numAlign; i++) {
+        for (let j = 0; j < numAlign; j++) {
+          if (!(i == 0 && j == 0 || i == 0 && j == numAlign - 1 || i == numAlign - 1 && j == 0))
+            this.drawAlignmentPattern(alignPatPos[i], alignPatPos[j]);
+        }
+      }
+      this.drawFormatBits(0);
+      this.drawVersion();
+    }
+    drawFormatBits(mask) {
+      const data = this.errorCorrectionLevel.formatBits << 3 | mask;
+      let rem = data;
+      for (let i = 0; i < 10; i++)
+        rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+      const bits = (data << 10 | rem) ^ 0x5412;
+      assert(bits >>> 15 == 0);
+      for (let i = 0; i <= 5; i++)
+        this.setFunctionModule(8, i, getBit(bits, i));
+      this.setFunctionModule(8, 7, getBit(bits, 6));
+      this.setFunctionModule(8, 8, getBit(bits, 7));
+      this.setFunctionModule(7, 8, getBit(bits, 8));
+      for (let i = 9; i < 15; i++)
+        this.setFunctionModule(14 - i, 8, getBit(bits, i));
+      for (let i = 0; i < 8; i++)
+        this.setFunctionModule(this.size - 1 - i, 8, getBit(bits, i));
+      for (let i = 8; i < 15; i++)
+        this.setFunctionModule(8, this.size - 15 + i, getBit(bits, i));
+      this.setFunctionModule(8, this.size - 8, true);
+    }
+    drawVersion() {
+      if (this.version < 7)
+        return;
+      let rem = this.version;
+      for (let i = 0; i < 12; i++)
+        rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+      const bits = this.version << 12 | rem;
+      assert(bits >>> 18 == 0);
+      for (let i = 0; i < 18; i++) {
+        const color = getBit(bits, i);
+        const a = this.size - 11 + i % 3;
+        const b = Math.floor(i / 3);
+        this.setFunctionModule(a, b, color);
+        this.setFunctionModule(b, a, color);
+      }
+    }
+    drawFinderPattern(x, y) {
+      for (let dy = -4; dy <= 4; dy++) {
+        for (let dx = -4; dx <= 4; dx++) {
+          const dist = Math.max(Math.abs(dx), Math.abs(dy));
+          const xx = x + dx;
+          const yy = y + dy;
+          if (0 <= xx && xx < this.size && 0 <= yy && yy < this.size)
+            this.setFunctionModule(xx, yy, dist != 2 && dist != 4);
+        }
+      }
+    }
+    drawAlignmentPattern(x, y) {
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++)
+          this.setFunctionModule(x + dx, y + dy, Math.max(Math.abs(dx), Math.abs(dy)) != 1);
+      }
+    }
+    setFunctionModule(x, y, isDark) {
+      this.modules[y][x] = isDark;
+      this.isFunction[y][x] = true;
+    }
+    addEccAndInterleave(data) {
+      const ver = this.version;
+      const ecl = this.errorCorrectionLevel;
+      if (data.length != QrCode.getNumDataCodewords(ver, ecl))
+        throw new RangeError("Invalid argument");
+      const numBlocks = QrCode.NUM_ERROR_CORRECTION_BLOCKS[ecl.ordinal][ver];
+      const blockEccLen = QrCode.ECC_CODEWORDS_PER_BLOCK[ecl.ordinal][ver];
+      const rawCodewords = Math.floor(QrCode.getNumRawDataModules(ver) / 8);
+      const numShortBlocks = numBlocks - rawCodewords % numBlocks;
+      const shortBlockLen = Math.floor(rawCodewords / numBlocks);
+      let blocks = [];
+      const rsDiv = QrCode.reedSolomonComputeDivisor(blockEccLen);
+      for (let i = 0, k = 0; i < numBlocks; i++) {
+        let dat = data.slice(k, k + shortBlockLen - blockEccLen + (i < numShortBlocks ? 0 : 1));
+        k += dat.length;
+        const ecc = QrCode.reedSolomonComputeRemainder(dat, rsDiv);
+        if (i < numShortBlocks)
+          dat.push(0);
+        blocks.push(dat.concat(ecc));
+      }
+      let result = [];
+      for (let i = 0; i < blocks[0].length; i++) {
+        blocks.forEach((block, j) => {
+          if (i != shortBlockLen - blockEccLen || j >= numShortBlocks)
+            result.push(block[i]);
+        });
+      }
+      assert(result.length == rawCodewords);
+      return result;
+    }
+    drawCodewords(data) {
+      if (data.length != Math.floor(QrCode.getNumRawDataModules(this.version) / 8))
+        throw new RangeError("Invalid argument");
+      let i = 0;
+      for (let right = this.size - 1; right >= 1; right -= 2) {
+        if (right == 6)
+          right = 5;
+        for (let vert = 0; vert < this.size; vert++) {
+          for (let j = 0; j < 2; j++) {
+            const x = right - j;
+            const upward = ((right + 1) & 2) == 0;
+            const y = upward ? this.size - 1 - vert : vert;
+            if (!this.isFunction[y][x] && i < data.length * 8) {
+              this.modules[y][x] = getBit(data[i >>> 3], 7 - (i & 7));
+              i++;
+            }
+          }
+        }
+      }
+      assert(i == data.length * 8);
+    }
+    applyMask(mask) {
+      if (mask < 0 || mask > 7)
+        throw new RangeError("Mask value out of range");
+      for (let y = 0; y < this.size; y++) {
+        for (let x = 0; x < this.size; x++) {
+          let invert;
+          switch (mask) {
+            case 0:
+              invert = (x + y) % 2 == 0;
+              break;
+            case 1:
+              invert = y % 2 == 0;
+              break;
+            case 2:
+              invert = x % 3 == 0;
+              break;
+            case 3:
+              invert = (x + y) % 3 == 0;
+              break;
+            case 4:
+              invert = (Math.floor(x / 3) + Math.floor(y / 2)) % 2 == 0;
+              break;
+            case 5:
+              invert = x * y % 2 + x * y % 3 == 0;
+              break;
+            case 6:
+              invert = (x * y % 2 + x * y % 3) % 2 == 0;
+              break;
+            case 7:
+              invert = ((x + y) % 2 + x * y % 3) % 2 == 0;
+              break;
+            default: throw new Error("Unreachable");
+          }
+          if (!this.isFunction[y][x] && invert)
+            this.modules[y][x] = !this.modules[y][x];
+        }
+      }
+    }
+    getPenaltyScore() {
+      let result = 0;
+      for (let y = 0; y < this.size; y++) {
+        let runColor = false;
+        let runX = 0;
+        let runHistory = [0, 0, 0, 0, 0, 0, 0];
+        for (let x = 0; x < this.size; x++) {
+          if (this.modules[y][x] == runColor) {
+            runX++;
+            if (runX == 5)
+              result += QrCode.PENALTY_N1;
+            else if (runX > 5)
+              result++;
+          }
+          else {
+            this.finderPenaltyAddHistory(runX, runHistory);
+            if (!runColor)
+              result += this.finderPenaltyCountPatterns(runHistory) * QrCode.PENALTY_N3;
+            runColor = this.modules[y][x];
+            runX = 1;
+          }
+        }
+        result += this.finderPenaltyTerminateAndCount(runColor, runX, runHistory) * QrCode.PENALTY_N3;
+      }
+      for (let x = 0; x < this.size; x++) {
+        let runColor = false;
+        let runY = 0;
+        let runHistory = [0, 0, 0, 0, 0, 0, 0];
+        for (let y = 0; y < this.size; y++) {
+          if (this.modules[y][x] == runColor) {
+            runY++;
+            if (runY == 5)
+              result += QrCode.PENALTY_N1;
+            else if (runY > 5)
+              result++;
+          }
+          else {
+            this.finderPenaltyAddHistory(runY, runHistory);
+            if (!runColor)
+              result += this.finderPenaltyCountPatterns(runHistory) * QrCode.PENALTY_N3;
+            runColor = this.modules[y][x];
+            runY = 1;
+          }
+        }
+        result += this.finderPenaltyTerminateAndCount(runColor, runY, runHistory) * QrCode.PENALTY_N3;
+      }
+      for (let y = 0; y < this.size - 1; y++) {
+        for (let x = 0; x < this.size - 1; x++) {
+          const color = this.modules[y][x];
+          if (color == this.modules[y][x + 1] &&
+            color == this.modules[y + 1][x] &&
+            color == this.modules[y + 1][x + 1])
+            result += QrCode.PENALTY_N2;
+        }
+      }
+      let dark = 0;
+      for (const row of this.modules)
+        dark = row.reduce((sum, color) => sum + (color ? 1 : 0), dark);
+      const total = this.size * this.size;
+      const k = Math.ceil(Math.abs(dark * 20 - total * 10) / total) - 1;
+      assert(0 <= k && k <= 9);
+      result += k * QrCode.PENALTY_N4;
+      assert(0 <= result && result <= 2568888);
+      return result;
+    }
+    getAlignmentPatternPositions() {
+      if (this.version == 1)
+        return [];
+      else {
+        const numAlign = Math.floor(this.version / 7) + 2;
+        const step = Math.floor((this.version * 8 + numAlign * 3 + 5) / (numAlign * 4 - 4)) * 2;
+        let result = [6];
+        for (let pos = this.size - 7; result.length < numAlign; pos -= step)
+          result.splice(1, 0, pos);
+        return result;
+      }
+    }
+    static getNumRawDataModules(ver) {
+      if (ver < QrCode.MIN_VERSION || ver > QrCode.MAX_VERSION)
+        throw new RangeError("Version number out of range");
+      let result = (16 * ver + 128) * ver + 64;
+      if (ver >= 2) {
+        const numAlign = Math.floor(ver / 7) + 2;
+        result -= (25 * numAlign - 10) * numAlign - 55;
+        if (ver >= 7)
+          result -= 36;
+      }
+      assert(208 <= result && result <= 29648);
+      return result;
+    }
+    static getNumDataCodewords(ver, ecl) {
+      return Math.floor(QrCode.getNumRawDataModules(ver) / 8) -
+        QrCode.ECC_CODEWORDS_PER_BLOCK[ecl.ordinal][ver] *
+          QrCode.NUM_ERROR_CORRECTION_BLOCKS[ecl.ordinal][ver];
+    }
+    static reedSolomonComputeDivisor(degree) {
+      if (degree < 1 || degree > 255)
+        throw new RangeError("Degree out of range");
+      let result = [];
+      for (let i = 0; i < degree - 1; i++)
+        result.push(0);
+      result.push(1);
+      let root = 1;
+      for (let i = 0; i < degree; i++) {
+        for (let j = 0; j < result.length; j++) {
+          result[j] = QrCode.reedSolomonMultiply(result[j], root);
+          if (j + 1 < result.length)
+            result[j] ^= result[j + 1];
+        }
+        root = QrCode.reedSolomonMultiply(root, 0x02);
+      }
+      return result;
+    }
+    static reedSolomonComputeRemainder(data, divisor) {
+      let result = divisor.map(_ => 0);
+      for (const b of data) {
+        const factor = b ^ result.shift();
+        result.push(0);
+        divisor.forEach((coef, i) => result[i] ^= QrCode.reedSolomonMultiply(coef, factor));
+      }
+      return result;
+    }
+    static reedSolomonMultiply(x, y) {
+      if (x >>> 8 != 0 || y >>> 8 != 0)
+        throw new RangeError("Byte out of range");
+      let z = 0;
+      for (let i = 7; i >= 0; i--) {
+        z = (z << 1) ^ ((z >>> 7) * 0x11D);
+        z ^= ((y >>> i) & 1) * x;
+      }
+      assert(z >>> 8 == 0);
+      return z;
+    }
+    finderPenaltyCountPatterns(runHistory) {
+      const n = runHistory[1];
+      assert(n <= this.size * 3);
+      const core = n > 0 && runHistory[2] == n && runHistory[3] == n * 3 && runHistory[4] == n && runHistory[5] == n;
+      return (core && runHistory[0] >= n * 4 && runHistory[6] >= n ? 1 : 0)
+        + (core && runHistory[6] >= n * 4 && runHistory[0] >= n ? 1 : 0);
+    }
+    finderPenaltyTerminateAndCount(currentRunColor, currentRunLength, runHistory) {
+      if (currentRunColor) {
+        this.finderPenaltyAddHistory(currentRunLength, runHistory);
+        currentRunLength = 0;
+      }
+      currentRunLength += this.size;
+      this.finderPenaltyAddHistory(currentRunLength, runHistory);
+      return this.finderPenaltyCountPatterns(runHistory);
+    }
+    finderPenaltyAddHistory(currentRunLength, runHistory) {
+      if (runHistory[0] == 0)
+        currentRunLength += this.size;
+      runHistory.pop();
+      runHistory.unshift(currentRunLength);
+    }
+  }
+  QrCode.MIN_VERSION = 1;
+  QrCode.MAX_VERSION = 40;
+  QrCode.PENALTY_N1 = 3;
+  QrCode.PENALTY_N2 = 3;
+  QrCode.PENALTY_N3 = 40;
+  QrCode.PENALTY_N4 = 10;
+  QrCode.ECC_CODEWORDS_PER_BLOCK = [
+    [-1, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18, 20, 24, 26, 30, 22, 24, 28, 30, 28, 28, 28, 28, 30, 30, 26, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+    [-1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28],
+    [-1, 13, 22, 18, 26, 18, 24, 18, 22, 20, 24, 28, 26, 24, 20, 30, 24, 28, 28, 26, 30, 28, 30, 30, 30, 30, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+    [-1, 17, 28, 22, 16, 22, 28, 26, 26, 24, 28, 24, 28, 22, 24, 24, 30, 28, 28, 26, 28, 30, 24, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+  ];
+  QrCode.NUM_ERROR_CORRECTION_BLOCKS = [
+    [-1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4, 4, 4, 4, 4, 6, 6, 6, 6, 7, 8, 8, 9, 9, 10, 12, 12, 12, 13, 14, 15, 16, 17, 18, 19, 19, 20, 21, 22, 24, 25],
+    [-1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49],
+    [-1, 1, 1, 2, 2, 4, 4, 6, 6, 8, 8, 8, 10, 12, 16, 12, 17, 16, 18, 21, 20, 23, 23, 25, 27, 29, 34, 34, 35, 38, 40, 43, 45, 48, 51, 53, 56, 59, 62, 65, 68],
+    [-1, 1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25, 25, 34, 30, 32, 35, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 70, 74, 77, 81],
+  ];
+  qrcodegen.QrCode = QrCode;
+  function appendBits(val, len, bb) {
+    if (len < 0 || len > 31 || val >>> len != 0)
+      throw new RangeError("Value out of range");
+    for (let i = len - 1; i >= 0; i--)
+      bb.push((val >>> i) & 1);
+  }
+  function getBit(x, i) {
+    return ((x >>> i) & 1) != 0;
+  }
+  function assert(cond) {
+    if (!cond)
+      throw new Error("Assertion error");
+  }
+  class QrSegment {
+    static makeBytes(data) {
+      let bb = [];
+      for (const b of data)
+        appendBits(b, 8, bb);
+      return new QrSegment(QrSegment.Mode.BYTE, data.length, bb);
+    }
+    static makeNumeric(digits) {
+      if (!QrSegment.isNumeric(digits))
+        throw new RangeError("String contains non-numeric characters");
+      let bb = [];
+      for (let i = 0; i < digits.length;) {
+        const n = Math.min(digits.length - i, 3);
+        appendBits(parseInt(digits.substring(i, i + n), 10), n * 3 + 1, bb);
+        i += n;
+      }
+      return new QrSegment(QrSegment.Mode.NUMERIC, digits.length, bb);
+    }
+    static makeAlphanumeric(text) {
+      if (!QrSegment.isAlphanumeric(text))
+        throw new RangeError("String contains unencodable characters in alphanumeric mode");
+      let bb = [];
+      let i;
+      for (i = 0; i + 2 <= text.length; i += 2) {
+        let temp = QrSegment.ALPHANUMERIC_CHARSET.indexOf(text.charAt(i)) * 45;
+        temp += QrSegment.ALPHANUMERIC_CHARSET.indexOf(text.charAt(i + 1));
+        appendBits(temp, 11, bb);
+      }
+      if (i < text.length)
+        appendBits(QrSegment.ALPHANUMERIC_CHARSET.indexOf(text.charAt(i)), 6, bb);
+      return new QrSegment(QrSegment.Mode.ALPHANUMERIC, text.length, bb);
+    }
+    static makeSegments(text) {
+      if (text == "")
+        return [];
+      else if (QrSegment.isNumeric(text))
+        return [QrSegment.makeNumeric(text)];
+      else if (QrSegment.isAlphanumeric(text))
+        return [QrSegment.makeAlphanumeric(text)];
+      else
+        return [QrSegment.makeBytes(QrSegment.toUtf8ByteArray(text))];
+    }
+    static makeEci(assignVal) {
+      let bb = [];
+      if (assignVal < 0)
+        throw new RangeError("ECI assignment value out of range");
+      else if (assignVal < (1 << 7))
+        appendBits(assignVal, 8, bb);
+      else if (assignVal < (1 << 14)) {
+        appendBits(0b10, 2, bb);
+        appendBits(assignVal, 14, bb);
+      }
+      else if (assignVal < 1000000) {
+        appendBits(0b110, 3, bb);
+        appendBits(assignVal, 21, bb);
+      }
+      else
+        throw new RangeError("ECI assignment value out of range");
+      return new QrSegment(QrSegment.Mode.ECI, 0, bb);
+    }
+    static isNumeric(text) {
+      return QrSegment.NUMERIC_REGEX.test(text);
+    }
+    static isAlphanumeric(text) {
+      return QrSegment.ALPHANUMERIC_REGEX.test(text);
+    }
+    constructor(mode, numChars, bitData) {
+      this.mode = mode;
+      this.numChars = numChars;
+      this.bitData = bitData;
+      if (numChars < 0)
+        throw new RangeError("Invalid argument");
+      this.bitData = bitData.slice();
+    }
+    getData() {
+      return this.bitData.slice();
+    }
+    static getTotalBits(segs, version) {
+      let result = 0;
+      for (const seg of segs) {
+        const ccbits = seg.mode.numCharCountBits(version);
+        if (seg.numChars >= (1 << ccbits))
+          return Infinity;
+        result += 4 + ccbits + seg.bitData.length;
+      }
+      return result;
+    }
+    static toUtf8ByteArray(str) {
+      str = encodeURI(str);
+      let result = [];
+      for (let i = 0; i < str.length; i++) {
+        if (str.charAt(i) != "%")
+          result.push(str.charCodeAt(i));
+        else {
+          result.push(parseInt(str.substring(i + 1, i + 3), 16));
+          i += 2;
+        }
+      }
+      return result;
+    }
+  }
+  QrSegment.NUMERIC_REGEX = /^[0-9]*$/;
+  QrSegment.ALPHANUMERIC_REGEX = /^[A-Z0-9 $%*+.\/:-]*$/;
+  QrSegment.ALPHANUMERIC_CHARSET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+  qrcodegen.QrSegment = QrSegment;
+})(qrcodegen || (qrcodegen = {}));
+(function (qrcodegen) {
+  var QrCode;
+  (function (QrCode) {
+    class Ecc {
+      constructor(ordinal, formatBits) {
+        this.ordinal = ordinal;
+        this.formatBits = formatBits;
+      }
+    }
+    Ecc.LOW = new Ecc(0, 1);
+    Ecc.MEDIUM = new Ecc(1, 0);
+    Ecc.QUARTILE = new Ecc(2, 3);
+    Ecc.HIGH = new Ecc(3, 2);
+    QrCode.Ecc = Ecc;
+  })(QrCode = qrcodegen.QrCode || (qrcodegen.QrCode = {}));
+})(qrcodegen || (qrcodegen = {}));
+(function (qrcodegen) {
+  var QrSegment;
+  (function (QrSegment) {
+    class Mode {
+      constructor(modeBits, numBitsCharCount) {
+        this.modeBits = modeBits;
+        this.numBitsCharCount = numBitsCharCount;
+      }
+      numCharCountBits(ver) {
+        return this.numBitsCharCount[Math.floor((ver + 7) / 17)];
+      }
+    }
+    Mode.NUMERIC = new Mode(0x1, [10, 12, 14]);
+    Mode.ALPHANUMERIC = new Mode(0x2, [9, 11, 13]);
+    Mode.BYTE = new Mode(0x4, [8, 16, 16]);
+    Mode.KANJI = new Mode(0x8, [8, 10, 12]);
+    Mode.ECI = new Mode(0x7, [0, 0, 0]);
+    QrSegment.Mode = Mode;
+  })(QrSegment = qrcodegen.QrSegment || (qrcodegen.QrSegment = {}));
+})(qrcodegen || (qrcodegen = {}));
+// ---- src/payloads.js ----
+// Pure payload builders. No DOM access. Each builder returns { payload, warnings }.
+
+function escapeWifi(s) {
+  // One pass, so a backslash is escaped exactly once (equivalent to "escape \ first").
+  return String(s).replace(/([\\;,:"])/g, '\\$1');
+}
+
+function escapeVcard(s) {
+  return String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/([,;])/g, '\\$1')
+    .replace(/\r\n|\r|\n/g, '\\n');
+}
+
+function buildText({ value }) {
+  return { payload: value || '', warnings: [] };
+}
+
+// A scheme is letters/digits/+/- followed by ":" not followed by a digit,
+// so "example.com:8080" and "localhost:3000" are treated as scheme-less.
+const SCHEME_RE = /^[a-z][a-z0-9+-]*:(?!\d)/i;
+
+function buildUrl({ value }) {
+  const warnings = [];
+  let url = (value || '').trim();
+  if (!url) return { payload: '', warnings };
+  if (!SCHEME_RE.test(url)) url = 'https://' + url;
+  let ok = true;
+  try { new URL(url); } catch { ok = false; }
+  if (ok && /^https?:\/\/[^/?#]*\s/i.test(url)) ok = false;
+  if (!ok) warnings.push('This doesn’t look like a valid URL. It will still be encoded as typed.');
+  return { payload: url, warnings };
+}
+
+function buildWifi({ ssid = '', password = '', security = 'WPA', hidden = false }) {
+  const warnings = [];
+  if (!ssid) return { payload: '', warnings: ['SSID is required'] };
+  const q = v => /^[0-9a-fA-F]+$/.test(v) ? `"${escapeWifi(v)}"` : escapeWifi(v);
+  let out = `WIFI:T:${security};S:${q(ssid)};`;
+  if (security !== 'nopass') {
+    if (!password) warnings.push('No password entered. Choose “None (open)” if the network has no password.');
+    out += `P:${q(password)};`;
+  }
+  if (hidden) out += 'H:true;';
+  if (security === 'WEP' && password && ![5, 13, 16, 29].includes(password.length) &&
+      !(/^[0-9a-fA-F]+$/.test(password) && [10, 26, 32, 58].includes(password.length))) {
+    warnings.push('WEP keys are usually 5 or 13 characters (or 10 or 26 hex digits).');
+  }
+  return { payload: out + ';', warnings };
+}
+
+function buildVcard(f) {
+  const warnings = [];
+  const v = k => (f[k] || '').trim();
+  const first = v('first'), last = v('last');
+  const fn = v('fn') || [first, last].filter(Boolean).join(' ');
+  if (!fn) return { payload: '', warnings: ['A name is required'] };
+  const e = escapeVcard;
+  const lines = ['BEGIN:VCARD', 'VERSION:3.0', `N:${e(last)};${e(first)};;;`, `FN:${e(fn)}`];
+  if (v('org')) lines.push(`ORG:${e(v('org'))}`);
+  if (v('title')) lines.push(`TITLE:${e(v('title'))}`);
+  if (v('tel')) lines.push(`TEL;TYPE=CELL:${e(v('tel'))}`);
+  if (v('email')) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v('email'))) warnings.push('The email address looks incomplete.');
+    lines.push(`EMAIL;TYPE=INTERNET:${e(v('email'))}`);
+  }
+  if (v('url')) lines.push(`URL:${e(v('url'))}`);
+  const adr = ['street', 'city', 'region', 'postal', 'country'].map(v);
+  if (adr.some(Boolean)) lines.push(`ADR;TYPE=WORK:;;${adr.map(e).join(';')}`);
+  if ((f.note || '').trim()) lines.push(`NOTE:${e(f.note.trim())}`);
+  lines.push('END:VCARD');
+  return { payload: lines.join('\r\n') + '\r\n', warnings };
+}
+
+const BUILDERS = { text: buildText, url: buildUrl, wifi: buildWifi, vcard: buildVcard };
+
+function buildPayload(type, fields) {
+  return BUILDERS[type](fields);
+}
+
+// --- Color helpers (WCAG relative luminance) ---
+function luminance(hex) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(c => {
+    c /= 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+function contrastRatio(a, b) {
+  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+const PAYLOADS = { escapeWifi, escapeVcard, buildText, buildUrl, buildWifi, buildVcard, buildPayload, luminance, contrastRatio };
+// ---- src/qr.js ----
+// Encoding and rendering helpers around the vendored Nayuki encoder.
+// Pure apart from toCanvas, which takes a canvas the caller creates.
+
+const QRGEN = typeof qrcodegen !== 'undefined' ? qrcodegen : require('./qrcodegen.js');
+
+const ECC_NAME = { L: 'LOW', M: 'MEDIUM', Q: 'QUARTILE', H: 'HIGH' };
+const ECC_LETTER = ['L', 'M', 'Q', 'H']; // indexed by Ecc.ordinal
+const MAX_BYTES = { L: 2953, M: 2331, Q: 1663, H: 1273 }; // byte mode, version 40
+
+function utf8Length(s) {
+  return new TextEncoder().encode(s).length;
+}
+
+// Fraction of the version-40 data capacity this payload uses at a level (can exceed 1).
+function capacityUsed(segs, ecc) {
+  const { QrCode, QrSegment } = QRGEN;
+  const bits = QrSegment.getTotalBits(segs, 40);
+  const cap = QrCode.getNumDataCodewords(40, QrCode.Ecc[ECC_NAME[ecc]]) * 8;
+  return bits === Infinity ? Infinity : bits / cap;
+}
+
+function encode(payload, ecc, boost = false) {
+  const { QrCode, QrSegment } = QRGEN;
+  const segs = QrSegment.makeSegments(payload);
+  const used = capacityUsed(segs, ecc);
+  try {
+    const qr = QrCode.encodeSegments(segs, QrCode.Ecc[ECC_NAME[ecc]], 1, 40, -1, !!boost);
+    return { qr, used, ecc: ECC_LETTER[qr.errorCorrectionLevel.ordinal] };
+  } catch (e) {
+    const fits = ECC_LETTER.filter(l => l !== ecc && capacityUsed(segs, l) <= 1);
+    const bytes = utf8Length(payload);
+    let msg = `Too much data for level ${ecc}: this payload is ${bytes.toLocaleString('en-US')} bytes, ` +
+      `and level ${ecc} holds at most ${MAX_BYTES[ecc].toLocaleString('en-US')} bytes (version 40). `;
+    msg += fits.length ? `Try level ${fits.join(' or ')}, or shorten the input.`
+                       : 'Shorten the input — it doesn’t fit at any level.';
+    return { error: msg, used, fits };
+  }
+}
+
+// All dark modules as one <path>, horizontal runs per row.
+function svgPath(qr, qz) {
+  let d = '';
+  for (let y = 0; y < qr.size; y++) {
+    for (let x = 0; x < qr.size; x++) {
+      if (!qr.getModule(x, y)) continue;
+      let len = 1;
+      while (x + len < qr.size && qr.getModule(x + len, y)) len++;
+      d += `M${x + qz} ${y + qz}h${len}v1h-${len}z`;
+      x += len - 1;
+    }
+  }
+  return d;
+}
+
+function toSvgString(qr, qz, fg, bg, label = '') {
+  const n = qr.size + qz * 2;
+  const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"` +
+    (label ? ` role="img" aria-label="${esc(label)}"` : '') + '>' +
+    `<rect width="100%" height="100%" fill="${bg}"/>` +
+    `<path d="${svgPath(qr, qz)}" fill="${fg}"/></svg>`;
+}
+
+// Integer pixels-per-module; canvas side = (size + 2*qz) * scale.
+function toCanvas(qr, scale, qz, fg, bg, canvas) {
+  const n = qr.size + qz * 2;
+  canvas.width = canvas.height = n * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = fg;
+  for (let y = 0; y < qr.size; y++) {
+    for (let x = 0; x < qr.size; x++) {
+      if (!qr.getModule(x, y)) continue;
+      let len = 1;
+      while (x + len < qr.size && qr.getModule(x + len, y)) len++;
+      ctx.fillRect((x + qz) * scale, (y + qz) * scale, len * scale, scale);
+      x += len - 1;
+    }
+  }
+  return canvas;
+}
+
+// Nearest integer scale for a requested pixel size (at least 1 px per module).
+function pngScale(qr, qz, requested) {
+  return Math.max(1, Math.round(requested / (qr.size + qz * 2)));
+}
+
+const QR = { ECC_NAME, ECC_LETTER, MAX_BYTES, utf8Length, encode, svgPath, toSvgString, toCanvas, pngScale };
+// ---- src/app.js ----
+// UI wiring. Inlined into the same module after payloads.js and qr.js, so their
+// functions (buildPayload, contrastRatio, luminance, encode, toSvgString, toCanvas,
+// pngScale, utf8Length, MAX_BYTES) are in scope directly.
+
+const STORE_KEY = 'qr-generator:v1';
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+
+const state = {
+  type: 'text', ecc: 'M', boostEcc: false, quietZone: 4, pngSize: 1024,
+  fg: '#000000', bg: '#ffffff', remember: false, rememberPassword: false,
+  fields: {
+    text: { value: '' },
+    url: { value: '' },
+    wifi: { ssid: '', password: '', security: 'WPA', hidden: false },
+    vcard: { first: '', last: '', fn: '', org: '', title: '', tel: '', email: '', url: '',
+             street: '', city: '', region: '', postal: '', country: '', note: '' }
+  }
+};
+let current = null; // { qr, payload } of the last successful encode
+
+// ---------- persistence (opt-in; Wi-Fi password excluded unless opted in) ----------
+function load() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    if (!saved || !saved.remember) return;
+    for (const k of Object.keys(state)) if (k !== 'fields' && k in saved) state[k] = saved[k];
+    for (const t of Object.keys(state.fields)) Object.assign(state.fields[t], saved.fields?.[t] || {});
+  } catch { /* storage unavailable */ }
+}
+function save() {
+  try {
+    if (!state.remember) { localStorage.removeItem(STORE_KEY); return; }
+    const copy = JSON.parse(JSON.stringify(state));
+    if (!state.rememberPassword) copy.fields.wifi.password = '';
+    localStorage.setItem(STORE_KEY, JSON.stringify(copy));
+  } catch { /* storage unavailable */ }
+}
+
+// ---------- state <-> form ----------
+function fillForms() {
+  for (const el of $$('[data-field]')) {
+    const [t, k] = el.dataset.field.split('.');
+    const v = state.fields[t][k];
+    if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+  }
+  for (const el of $$('[data-setting]')) {
+    const k = el.dataset.setting;
+    if (el.type === 'radio') el.checked = el.value === state[k];
+    else if (el.type === 'checkbox') el.checked = !!state[k];
+    else el.value = state[k];
+  }
+  selectTab(state.type, false);
+}
+
+function selectTab(type, focus) {
+  state.type = type;
+  for (const tab of $$('[role=tab]')) {
+    const on = tab.dataset.type === type;
+    tab.setAttribute('aria-selected', on);
+    tab.tabIndex = on ? 0 : -1;
+    if (on && focus) tab.focus();
+    $('#' + tab.getAttribute('aria-controls')).hidden = !on;
+  }
+}
+
+// ---------- render ----------
+function describe(type, f, payload) {
+  switch (type) {
+    case 'wifi': return `QR code: Wi-Fi network ${f.ssid}`;
+    case 'url': return `QR code: link to ${payload}`;
+    case 'vcard': return `QR code: contact card for ${f.fn || [f.first, f.last].filter(Boolean).join(' ')}`;
+    default: return `QR code: text, ${[...payload].length} characters`;
+  }
+}
+
+function render() {
+  const f = state.fields[state.type];
+  const { payload, warnings } = buildPayload(state.type, f);
+  const notes = [...warnings];
+  const preview = $('#qr');
+  const errorEl = $('#qr-error');
+  current = null;
+  errorEl.hidden = true;
+
+  if (state.fg.toLowerCase() === state.bg.toLowerCase()) notes.push('Foreground and background are the same color.');
+  else {
+    if (luminance(state.fg) > luminance(state.bg)) notes.push('Light-on-dark codes fail on some scanners. Use a darker foreground than background.');
+    const cr = contrastRatio(state.fg, state.bg);
+    if (cr < 4) notes.push(`Low contrast (${cr.toFixed(1)}:1). Aim for at least 4:1 so cameras can read it.`);
+  }
+  if (state.quietZone < 4) notes.push('The QR spec calls for a 4-module quiet zone. Smaller margins may not scan next to other content.');
+
+  const bytes = utf8Length(payload);
+  let result = null;
+  if (!payload) {
+    const empty = { text: 'Type some text', url: 'Enter a web address', wifi: 'Enter the network name (SSID)', vcard: 'Enter a name' }[state.type];
+    preview.innerHTML = `<p class="placeholder">${empty} to make a code.</p>`;
+    preview.setAttribute('aria-label', 'No QR code yet');
+    // the "required" warning is redundant with the placeholder
+    notes.splice(0, warnings.length);
+  } else {
+    result = encode(payload, state.ecc, state.boostEcc);
+    if (result.qr) {
+      current = { qr: result.qr, payload };
+      const label = describe(state.type, f, payload);
+      preview.innerHTML = toSvgString(result.qr, state.quietZone, state.fg, state.bg);
+      preview.setAttribute('aria-label', label);
+      preview.style.setProperty('--qr-bg', state.bg);
+    } else {
+      preview.innerHTML = '<p class="placeholder">No code — the input is too large for this level.</p>';
+      preview.setAttribute('aria-label', 'No QR code: input too large');
+      errorEl.textContent = result.error;
+      errorEl.hidden = false;
+    }
+  }
+
+  // stats
+  const qr = current?.qr;
+  $('#stat-version').textContent = qr ? qr.version : '—';
+  $('#stat-modules').textContent = qr ? `${qr.size}×${qr.size}` : '—';
+  $('#stat-bytes').textContent = bytes.toLocaleString();
+  $('#stat-level').textContent = qr ? result.ecc + (result.ecc !== state.ecc ? ' (boosted)' : '') : state.ecc;
+  const used = result ? result.used : 0;
+  const pct = Math.min(100, used * 100);
+  const bar = $('#capacity');
+  bar.style.setProperty('--used', pct + '%');
+  bar.classList.toggle('over', used > 1);
+  bar.classList.toggle('high', used > 0.85 && used <= 1);
+  bar.setAttribute('aria-valuenow', Math.round(used * 100));
+  $('#capacity-label').textContent =
+    `${bytes.toLocaleString()} / ${MAX_BYTES[state.ecc].toLocaleString()} bytes at level ${state.ecc}` +
+    (used > 0 && Math.abs(used - bytes / MAX_BYTES[state.ecc]) > 0.02 ? ` · ${Math.round(used * 100)}% of capacity` : '');
+
+  $('#warnings').innerHTML = notes.map(n => `<li>${escapeHtml(n)}</li>`).join('');
+  $('#payload-raw').textContent = payload.replace(/\r\n/g, '↵\n') || '(empty)';
+
+  // png size hint
+  if (qr) {
+    const s = pngScale(qr, state.quietZone, state.pngSize);
+    $('#png-hint').textContent = `Exports at ${((qr.size + state.quietZone * 2) * s).toLocaleString()} px (${s} px per module)`;
+  } else $('#png-hint').textContent = '';
+
+  for (const b of $$('[data-needs-code]')) b.disabled = !current;
+  $('#copy-payload').disabled = !payload;
+  save();
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+}
+
+let timer;
+const renderSoon = () => { clearTimeout(timer); timer = setTimeout(render, 150); };
+
+// ---------- exports ----------
+function fileName(ext) {
+  const d = new Date();
+  const ymd = [d.getFullYear(), d.getMonth() + 1, d.getDate()].map(n => String(n).padStart(2, '0')).join('-');
+  return `qr-${state.type}-${ymd}.${ext}`;
+}
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function pngBlob() {
+  const { qr } = current;
+  const canvas = toCanvas(qr, pngScale(qr, state.quietZone, state.pngSize), state.quietZone, state.fg, state.bg,
+    document.createElement('canvas'));
+  return new Promise(res => canvas.toBlob(res, 'image/png'));
+}
+function status(msg) {
+  const el = $('#status');
+  el.textContent = msg;
+  clearTimeout(status.t);
+  status.t = setTimeout(() => { el.textContent = ''; }, 2500);
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+  const ta = Object.assign(document.createElement('textarea'), { value: text, readOnly: true });
+  ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.append(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { /* unsupported */ }
+  ta.remove();
+  return ok;
+}
+
+// ---------- wiring ----------
+function wire() {
+  // tabs with arrow-key navigation
+  const tabs = $$('[role=tab]');
+  for (const tab of tabs) {
+    tab.addEventListener('click', () => { selectTab(tab.dataset.type, false); render(); });
+    tab.addEventListener('keydown', e => {
+      const i = tabs.indexOf(tab);
+      const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (next === undefined) return;
+      e.preventDefault();
+      selectTab(tabs[(next + tabs.length) % tabs.length].dataset.type, true);
+      render();
+    });
+  }
+
+  for (const el of $$('[data-field]')) {
+    el.addEventListener(el.type === 'checkbox' || el.tagName === 'SELECT' ? 'change' : 'input', () => {
+      const [t, k] = el.dataset.field.split('.');
+      state.fields[t][k] = el.type === 'checkbox' ? el.checked : el.value;
+      el.type === 'checkbox' || el.tagName === 'SELECT' ? render() : renderSoon();
+    });
+  }
+  // display name follows first + last until edited
+  const fn = $('[data-field="vcard.fn"]');
+  const syncFn = () => { fn.placeholder = [state.fields.vcard.first, state.fields.vcard.last].filter(Boolean).join(' ') || 'From first + last name'; };
+  $$('[data-field="vcard.first"],[data-field="vcard.last"]').forEach(el => el.addEventListener('input', syncFn));
+  syncFn();
+
+  for (const el of $$('[data-setting]')) {
+    el.addEventListener(el.type === 'number' ? 'input' : 'change', () => {
+      const k = el.dataset.setting;
+      if (el.type === 'radio') { if (!el.checked) return; state[k] = el.value; }
+      else if (el.type === 'checkbox') state[k] = el.checked;
+      else if (el.type === 'number') {
+        const n = Math.round(Number(el.value));
+        if (!Number.isFinite(n) || el.value === '') return;
+        state[k] = Math.min(Number(el.max), Math.max(Number(el.min), n));
+      } else state[k] = el.value;
+      $('#remember-pw').disabled = !state.remember;
+      el.type === 'number' ? renderSoon() : render();
+    });
+    if (el.type === 'number') el.addEventListener('change', () => { el.value = state[el.dataset.setting]; });
+  }
+  $('#remember-pw').disabled = !state.remember;
+
+  const pwToggle = $('#pw-toggle');
+  pwToggle.addEventListener('click', () => {
+    const pw = $('#wifi-password');
+    const show = pw.type === 'password';
+    pw.type = show ? 'text' : 'password';
+    pwToggle.setAttribute('aria-pressed', show);
+    pwToggle.textContent = show ? 'Hide' : 'Show';
+  });
+
+  $('#dl-svg').addEventListener('click', () => {
+    if (!current) return;
+    const svg = '<?xml version="1.0" encoding="UTF-8"?>\n' + toSvgString(current.qr, state.quietZone, state.fg, state.bg);
+    download(new Blob([svg], { type: 'image/svg+xml' }), fileName('svg'));
+  });
+  $('#dl-png').addEventListener('click', async () => {
+    if (current) download(await pngBlob(), fileName('png'));
+  });
+
+  const copyImg = $('#copy-img');
+  if (navigator.clipboard?.write && window.ClipboardItem && window.isSecureContext) {
+    copyImg.hidden = false;
+    copyImg.addEventListener('click', async () => {
+      if (!current) return;
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob() })]);
+        status('Image copied');
+      } catch {
+        status('This browser blocked copying the image. Use Download PNG instead.');
+      }
+    });
+  }
+  $('#copy-payload').addEventListener('click', async () => {
+    const { payload } = buildPayload(state.type, state.fields[state.type]);
+    status(payload && await copyText(payload) ? 'Payload copied' : 'Couldn’t copy the payload');
+  });
+}
+
+load();
+fillForms();
+wire();
+render();
+</script>
+</body>
+</html>
