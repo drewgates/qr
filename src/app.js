@@ -219,7 +219,13 @@ function wire() {
   syncFn();
 
   for (const el of $$('[data-setting]')) {
-    el.addEventListener(el.type === 'number' ? 'input' : 'change', () => {
+    // Color pickers fire "input" continuously while dragging and "change" only when the
+    // picker closes (and some browsers fire neither until then), so listen to both.
+    // Each color also has a hex text box, since some native pickers (Firefox on Windows)
+    // never apply the chosen color.
+    const isColor = el.type === 'color' || el.classList.contains('hex');
+    const events = isColor ? ['input', 'change'] : el.type === 'number' ? ['input'] : ['change'];
+    const onEvent = () => {
       const k = el.dataset.setting;
       if (el.type === 'radio') { if (!el.checked) return; state[k] = el.value; }
       else if (el.type === 'checkbox') state[k] = el.checked;
@@ -227,13 +233,23 @@ function wire() {
         const n = Math.round(Number(el.value));
         if (!Number.isFinite(n) || el.value === '') return;
         state[k] = Math.min(Number(el.max), Math.max(Number(el.min), n));
+      } else if (isColor) {
+        const v = normalizeHex(el.value);
+        if (!v || state[k] === v) return;
+        state[k] = v;
+        for (const other of $$(`[data-setting=${k}]`)) if (other !== el) other.value = v;
       } else state[k] = el.value;
-      $('#remember-pw').disabled = !state.remember;
+      // "Include the Wi-Fi password" implies remembering; turning remembering off clears both.
+      if (k === 'rememberPassword' && state.rememberPassword) state.remember = true;
+      if (k === 'remember' && !state.remember) state.rememberPassword = false;
+      $('[data-setting=remember]').checked = state.remember;
+      $('#remember-pw').checked = state.rememberPassword;
       el.type === 'number' ? renderSoon() : render();
-    });
-    if (el.type === 'number') el.addEventListener('change', () => { el.value = state[el.dataset.setting]; });
+    };
+    for (const ev of events) el.addEventListener(ev, onEvent);
+    // On blur, snap a clamped number or an invalid/short hex back to the value in use.
+    if (el.type === 'number' || el.classList.contains('hex')) el.addEventListener('change', () => { el.value = state[el.dataset.setting]; });
   }
-  $('#remember-pw').disabled = !state.remember;
 
   const pwToggle = $('#pw-toggle');
   pwToggle.addEventListener('click', () => {

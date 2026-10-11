@@ -110,3 +110,11 @@ test('SVG is a single path', () => {
   assert.equal((svg.match(/<rect/g) || []).length, 1);
   assert.ok(svg.includes(`viewBox="0 0 ${qr.size + 8} ${qr.size + 8}"`));
 });
+
+test('normalizeHex', () => {
+  assert.equal(P.normalizeHex('#AABBCC'), '#aabbcc');
+  assert.equal(P.normalizeHex(' 1a2b3c '), '#1a2b3c');
+  assert.equal(P.normalizeHex('#f0a'), '#ff00aa');
+  assert.equal(P.normalizeHex('#12345'), null);
+  assert.equal(P.normalizeHex('red'), null);
+});

@@ -88,10 +88,18 @@ function luminance(hex) {
   return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
 }
 
+// "#abc", "abc", "#AABBCC" -> "#aabbcc"; null if not a 3- or 6-digit hex color.
+function normalizeHex(s) {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(s).trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? [...m[1]].map(c => c + c).join('') : m[1];
+  return '#' + h.toLowerCase();
+}
+
 function contrastRatio(a, b) {
   const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
   return (x + 0.05) / (y + 0.05);
 }
 
-const PAYLOADS = { escapeWifi, escapeVcard, buildText, buildUrl, buildWifi, buildVcard, buildPayload, luminance, contrastRatio };
+const PAYLOADS = { escapeWifi, escapeVcard, buildText, buildUrl, buildWifi, buildVcard, buildPayload, luminance, contrastRatio, normalizeHex };
 if (typeof module !== 'undefined') module.exports = PAYLOADS;

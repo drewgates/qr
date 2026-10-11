@@ -57,6 +57,8 @@ legend{font-weight:600;font-size:.88rem;margin-bottom:6px;padding:0}
 .seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:2px}
 .colors{display:flex;gap:14px;flex-wrap:wrap}
 .colors label{display:flex;align-items:center;gap:8px;margin:0}
+.colors .color{display:flex;align-items:center;gap:8px}
+.colors input.hex{width:6.5em;padding:5px 8px;font-family:var(--mono)}
 input[type=color]{width:40px;height:32px;border:1px solid var(--line);border-radius:6px;padding:2px;background:var(--field)}
 #qr{display:grid;place-items:center;aspect-ratio:1;border-radius:8px;background:var(--qr-bg,#fff);border:1px solid var(--line);overflow:hidden}
 #qr svg{width:100%;height:100%;display:block}
@@ -174,14 +176,15 @@ footer a{color:inherit}
     <fieldset>
       <legend>Colors</legend>
       <div class="colors">
-        <label><input type="color" data-setting="fg"> Foreground</label>
-        <label><input type="color" data-setting="bg"> Background</label>
+        <div class="color"><label><input type="color" data-setting="fg"> Foreground</label><input type="text" class="hex" data-setting="fg" aria-label="Foreground hex code" maxlength="7" spellcheck="false" autocomplete="off"></div>
+        <div class="color"><label><input type="color" data-setting="bg"> Background</label><input type="text" class="hex" data-setting="bg" aria-label="Background hex code" maxlength="7" spellcheck="false" autocomplete="off"></div>
       </div>
     </fieldset>
     <fieldset style="margin:0">
       <legend>Storage</legend>
       <label class="check"><input type="checkbox" data-setting="remember"> Remember form values in this browser</label>
-      <label class="check" style="margin-top:6px"><input type="checkbox" id="remember-pw" data-setting="rememberPassword"> Include the Wi-Fi password</label>
+      <label class="check" style="margin-top:6px"><input type="checkbox" id="remember-pw" data-setting="rememberPassword"> Also remember the Wi-Fi password</label>
+      <p class="hint">Saved only in this browser on this device. The password is left out unless you tick the second box.</p>
     </fieldset>
   </div>
 </section>
@@ -926,12 +929,20 @@ function luminance(hex) {
   return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
 }
 
+// "#abc", "abc", "#AABBCC" -> "#aabbcc"; null if not a 3- or 6-digit hex color.
+function normalizeHex(s) {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(s).trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? [...m[1]].map(c => c + c).join('') : m[1];
+  return '#' + h.toLowerCase();
+}
+
 function contrastRatio(a, b) {
   const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
   return (x + 0.05) / (y + 0.05);
 }
 
-const PAYLOADS = { escapeWifi, escapeVcard, buildText, buildUrl, buildWifi, buildVcard, buildPayload, luminance, contrastRatio };
+const PAYLOADS = { escapeWifi, escapeVcard, buildText, buildUrl, buildWifi, buildVcard, buildPayload, luminance, contrastRatio, normalizeHex };
 // ---- src/qr.js ----
 // Encoding and rendering helpers around the vendored Nayuki encoder.
 // Pure apart from toCanvas, which takes a canvas the caller creates.
@@ -1245,7 +1256,13 @@ function wire() {
   syncFn();
 
   for (const el of $$('[data-setting]')) {
-    el.addEventListener(el.type === 'number' ? 'input' : 'change', () => {
+    // Color pickers fire "input" continuously while dragging and "change" only when the
+    // picker closes (and some browsers fire neither until then), so listen to both.
+    // Each color also has a hex text box, since some native pickers (Firefox on Windows)
+    // never apply the chosen color.
+    const isColor = el.type === 'color' || el.classList.contains('hex');
+    const events = isColor ? ['input', 'change'] : el.type === 'number' ? ['input'] : ['change'];
+    const onEvent = () => {
       const k = el.dataset.setting;
       if (el.type === 'radio') { if (!el.checked) return; state[k] = el.value; }
       else if (el.type === 'checkbox') state[k] = el.checked;
@@ -1253,13 +1270,23 @@ function wire() {
         const n = Math.round(Number(el.value));
         if (!Number.isFinite(n) || el.value === '') return;
         state[k] = Math.min(Number(el.max), Math.max(Number(el.min), n));
+      } else if (isColor) {
+        const v = normalizeHex(el.value);
+        if (!v || state[k] === v) return;
+        state[k] = v;
+        for (const other of $$(`[data-setting=${k}]`)) if (other !== el) other.value = v;
       } else state[k] = el.value;
-      $('#remember-pw').disabled = !state.remember;
+      // "Include the Wi-Fi password" implies remembering; turning remembering off clears both.
+      if (k === 'rememberPassword' && state.rememberPassword) state.remember = true;
+      if (k === 'remember' && !state.remember) state.rememberPassword = false;
+      $('[data-setting=remember]').checked = state.remember;
+      $('#remember-pw').checked = state.rememberPassword;
       el.type === 'number' ? renderSoon() : render();
-    });
-    if (el.type === 'number') el.addEventListener('change', () => { el.value = state[el.dataset.setting]; });
+    };
+    for (const ev of events) el.addEventListener(ev, onEvent);
+    // On blur, snap a clamped number or an invalid/short hex back to the value in use.
+    if (el.type === 'number' || el.classList.contains('hex')) el.addEventListener('change', () => { el.value = state[el.dataset.setting]; });
   }
-  $('#remember-pw').disabled = !state.remember;
 
   const pwToggle = $('#pw-toggle');
   pwToggle.addEventListener('click', () => {

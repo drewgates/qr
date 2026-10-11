@@ -4,6 +4,12 @@ A single-file, offline QR code generator: text, URL, Wi-Fi and vCard payloads, s
 error correction (L/M/Q/H), live preview, SVG/PNG export. Nothing leaves the page — a
 Content-Security-Policy meta tag blocks all network requests.
 
+```
+LLM Disclosure:
+
+This project was generated entirely by a large language model working from the include PRP.md. No warranty is offered or implied.
+```
+
 **Use it:** open `index.html` in a browser (from disk is fine), or host it on any static server.
 That file is the whole app.
 
